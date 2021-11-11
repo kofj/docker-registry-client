@@ -21,6 +21,28 @@ func (registry *Registry) DownloadBlob(repository string, digest digest.Digest) 
 	return resp.Body, nil
 }
 
+func (registry *Registry) MonolithicUploadBlob(repository string, digest digest.Digest, content io.Reader) (err error) {
+	uploadURL := registry.url("/v2/%s/blobs/uploads/?digest=%s", repository, digest.String())
+	registry.Logf("registry.blob.initiate-monolithic-upload url=%s repository=%s", uploadURL, repository)
+
+	resp, err := registry.Client.Post(uploadURL, "application/octet-stream", content)
+	if err != nil {
+		registry.Logf("registry.blob.initiate-monolithic-upload failed url=%s repository=%s error=%s", uploadURL, repository, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		registry.Logf("registry.blob.initiate-monolithic-upload read body failed url=%s repository=%s error=%s", uploadURL, repository, err.Error())
+		return
+	}
+	if len(body) > 0 {
+		registry.Logf("registry.blob.initiate-monolithic-upload read body url=%s repository=%s body=%s", uploadURL, repository, body)
+	}
+
+	return
+}
+
 // UploadBlob can be used to upload an FS layer or an image config file into the given repository.
 // It uploads the bytes read from content. Digest must match with the hash of those bytes.
 // In case of token authentication the HTTP request must be retried after a 401 Unauthorized response
