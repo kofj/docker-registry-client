@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	ErrNoMorePages = errors.New("No more pages")
+	ErrNoMorePages = errors.New("no more pages")
 )
 
-func (registry *Registry) getJson(url string, response interface{}) error {
+func (registry *Registry) GetJson(url string, response interface{}) error {
 	resp, err := registry.Client.Get(url)
 	if err != nil {
 		return err

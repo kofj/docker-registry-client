@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,6 +20,43 @@ func (registry *Registry) DownloadBlob(repository string, digest digest.Digest) 
 	}
 
 	return resp.Body, nil
+}
+
+func (registry *Registry) MonolithicUploadBlob(repository string, digest digest.Digest, contentSize int, content io.Reader, getBody func() (io.ReadCloser, error)) (err error) {
+	initiateUrl := registry.url("/v2/%s/blobs/uploads/?digest=%s", repository, digest.String())
+	registry.Logf("registry.blob.initiate-monolithic-upload url=%s repository=%s", initiateUrl, repository)
+
+	resp, err := registry.Client.Post(initiateUrl, "application/octet-stream", content)
+	if err != nil {
+		registry.Logf("registry.blob.initiate-monolithic-upload failed url=%s repository=%s error=%s", initiateUrl, repository, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	var location = resp.Header.Get("Location")
+	var upload_uuid = resp.Header.Get("Docker-Upload-UUID")
+	registry.Logf("registry.blob.initiate-monolithic-upload resp.location=%s, resp.upload_uuid=%s", location, upload_uuid)
+	uploadUrl, _ := url.Parse(location)
+	uploadUrl.Query().Set("digest", digest.String())
+
+	upload, err := http.NewRequest("PUT", uploadUrl.String(), content)
+	if err != nil {
+		return err
+	}
+	upload.Header.Set("Content-Type", "application/octet-stream")
+	upload.Header.Set("Content-Length", fmt.Sprint(contentSize))
+	if getBody != nil {
+		upload.GetBody = getBody
+	}
+
+	resp, err = registry.Client.Do(upload)
+	if err != nil {
+		registry.Logf("registry.blob.monolithic-upload failed, error=%s", err.Error())
+		return err
+	}
+	_ = resp.Body.Close()
+
+	return
 }
 
 // UploadBlob can be used to upload an FS layer or an image config file into the given repository.
